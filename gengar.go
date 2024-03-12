@@ -468,6 +468,29 @@ project "MainApp"
       optimize "On"
 `
 
+	switch m.testingFramework {
+	case "Google Test":
+		generateTestFiles(m)
+		content += `project "FooTests"
+               kind "ConsoleApp"
+               language "C++"
+               targetdir "bin/%{cfg.buildcfg}"
+
+               files { "tests/unit-tests/foo-tests.cpp" }
+               includedirs { "include" }
+
+               links { "Foo", "gtest", "gtest_main" }
+
+               filter "configurations:Debug"
+                  defines { "DEBUG" }
+                  symbols "On"
+
+               filter "configurations:Release"
+                  defines { "NDEBUG" }
+                  optimize "On"
+        `
+	default:
+	}
 	if err := os.WriteFile(filepath.Join(basePath, "premake5.lua"), []byte(content), 0644); err != nil {
 		return fmt.Errorf("failed to create file premake5.lua: %v", err)
 	}
