@@ -1,0 +1,8 @@
+# tests
+if [[ "$1" == "tests" ]]; then
+{{ .CompileStr }} -std={{ .CppStandard }} -Iinclude -Itests/unit-tests -o build/foo-tests tests/unit-tests/foo-tests.cpp src/foo/foo.cpp -lgtest -lgtest_main -pthread
+  ./build/foo-tests
+  exit 0
+fi
+
+

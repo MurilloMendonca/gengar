@@ -1,0 +1,37 @@
+includePath := include
+srcPath := src
+binPath := build/bin
+objPath := build/obj
+libPath := build/lib
+
+CC := {{ .CompileStr }}
+CFLAGS := -I$(includePath) -fPIC -std={{ .CppStandard }}
+LDFLAGS := -L$(libPath) -Wl,-rpath,$(libPath)
+
+# Target names
+EXECUTABLE := $(binPath)/main
+LIBRARY := $(libPath)/libfoo.so
+MAIN_OBJ := $(objPath)/main.o
+FOO_OBJ := $(objPath)/foo.o
+
+all: directories $(LIBRARY) $(EXECUTABLE)
+
+directories:
+	mkdir -p $(binPath) $(objPath) $(libPath)
+
+$(EXECUTABLE): $(MAIN_OBJ)
+	$(CC) $^ -o $@ $(LDFLAGS) -lfoo
+
+$(MAIN_OBJ): $(srcPath)/main.cpp
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(LIBRARY): $(FOO_OBJ)
+	$(CC) -shared $^ -o $@
+
+$(FOO_OBJ): $(srcPath)/foo/foo.cpp
+	$(CC) $(CFLAGS) -c $< -o $@
+
+clean:
+	rm -rf $(binPath) $(objPath) $(libPath)
+
+

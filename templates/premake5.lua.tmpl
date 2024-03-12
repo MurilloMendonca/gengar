@@ -1,0 +1,49 @@
+workspace "{{ .ProjectName }}"
+   configurations { "Debug", "Release" }
+   architecture "x86_64"
+   startproject "MainApp"
+
+   flags
+   {
+       "MultiProcessorCompile"
+   }
+
+   -- Global settings for all configurations
+   filter "system:linux"
+      cppdialect "{{ .CppStandard }}"
+      buildoptions { "-fPIC" }
+
+project "Foo"
+   kind "SharedLib"
+   language "C++"
+   targetdir "bin/%{cfg.buildcfg}"
+   targetname "foo"
+
+   files { "src/foo/**.cpp", "include/foo/**.h" }
+   includedirs { "include" }
+
+   filter "configurations:Debug"
+      defines { "DEBUG" }
+      symbols "On"
+
+   filter "configurations:Release"
+      defines { "NDEBUG" }
+      optimize "On"
+
+project "MainApp"
+   kind "ConsoleApp"
+   language "C++"
+   targetdir "bin/%{cfg.buildcfg}"
+
+   files { "src/main.cpp" }
+   includedirs { "include" }
+
+   links { "Foo" }
+
+   filter "configurations:Debug"
+      defines { "DEBUG" }
+      symbols "On"
+
+   filter "configurations:Release"
+      defines { "NDEBUG" }
+      optimize "On"

@@ -1,0 +1,33 @@
+#!/bin/bash
+# A simple build script
+{{ .CompileStr }} -std={{ .CppStandard }} -Iinclude -o build/main src/main.cpp src/foo/foo.cpp
+#!/bin/bash
+# A simple build script
+
+if [[ "$1" == "clean" ]]; then
+  rm -rf build/*
+  exit 0
+fi
+
+if [ ! -d "build" ]; then
+  mkdir build
+fi
+
+if [[ "$1" == "shared" ]]; then
+{{ .CompileStr }} -std={{ .CppStandard }} -Iinclude -c src/foo/foo.cpp -o build/foo.o
+{{ .CompileStr }} -std={{ .CppStandard }} -shared -o build/libfoo.so build/foo.o
+{{ .CompileStr }} -std={{ .CppStandard }} -Iinclude -o build/main src/main.cpp -Lbuild -lfoo -Wl,-rpath,./build
+  exit 0
+fi
+
+if [[ "$1" == "static" ]]; then
+{{ .CompileStr }} -std={{ .CppStandard }} -Iinclude -c src/foo/foo.cpp -o build/foo.o
+  ar rcs build/libfoo.a build/foo.o
+{{ .CompileStr }} -std={{ .CppStandard }} -Iinclude -o build/main src/main.cpp -Lbuild -lfoo
+  exit 0
+fi
+
+# Default build step if none of the above conditions are met
+{{ .CompileStr }} -std={{ .CppStandard }} -Iinclude -o build/main src/main.cpp src/foo/foo.cpp
+
+

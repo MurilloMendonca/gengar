@@ -1,0 +1,19 @@
+cmake_minimum_required(VERSION 3.10)
+project( {{ .ProjectName }} VERSION 1.0)
+
+# Specify the C++ standard
+set(CMAKE_CXX_STANDARD {{ .CppStandard }})
+set(CMAKE_CXX_STANDARD_REQUIRED True)
+
+# Include directories
+include_directories(include)
+
+# Create a shared library 'libfoo.so' from 'src/foo/foo.cpp'
+add_library(foo SHARED src/foo/foo.cpp)
+
+# Create the main program executable
+add_executable(main src/main.cpp)
+
+# Link the main program with the foo library
+target_link_libraries(main foo)
+
