@@ -13,11 +13,6 @@ type BuildSystem string
 type CppStandard string
 type Compiler string
 type TestingFramework string
-type DependencyManager string
-type DocumentationTool string
-type CICDTool string
-type CodeFormatter string
-type License string
 
 const (
 	Makefile   BuildSystem      = "Makefile"
@@ -231,7 +226,7 @@ target_link_libraries(main foo)
 
 	switch m.testingFramework {
 	case "Google Test":
-        generateTestFiles(m)
+		generateTestFiles(m)
 		content += `# Add the google test framework as a build dependency
 include(FetchContent)
 FetchContent_Declare(
@@ -294,7 +289,7 @@ LDFLAGS := -L$(libPath) -Wl,-rpath,$(libPath)
 EXECUTABLE := $(binPath)/main
 LIBRARY := $(libPath)/libfoo.so
 MAIN_OBJ := $(objPath)/main.o
-SUM_OBJ := $(objPath)/foo.o
+FOO_OBJ := $(objPath)/foo.o
 
 all: directories $(LIBRARY) $(EXECUTABLE)
 
@@ -307,16 +302,42 @@ $(EXECUTABLE): $(MAIN_OBJ)
 $(MAIN_OBJ): $(srcPath)/main.cpp
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(LIBRARY): $(SUM_OBJ)
+$(LIBRARY): $(FOO_OBJ)
 	$(CC) -shared $^ -o $@
 
-$(SUM_OBJ): $(srcPath)/foo/foo.cpp
+$(FOO_OBJ): $(srcPath)/foo/foo.cpp
 	$(CC) $(CFLAGS) -c $< -o $@
 
 clean:
 	rm -rf $(binPath) $(objPath) $(libPath)
 
 `
+
+	switch m.testingFramework {
+	case "Google Test":
+		generateTestFiles(m)
+		content += `# tests
+testsPath := tests/unit-tests
+testsBinPath := build/tests
+
+TEST_EXECUTABLE := $(testsBinPath)/unit-tests
+
+test-dir:
+	mkdir -p $(testsBinPath)
+
+test: directories test-dir $(TEST_EXECUTABLE)
+	$(TEST_EXECUTABLE)
+
+$(TEST_EXECUTABLE): $(testsPath)/foo-tests.cpp $(FOO_OBJ)
+	$(CC) $(CFLAGS) $^ -o $@ $(LDFLAGS) -lfoo -lgtest -lgtest_main -pthread
+
+clean-test:
+	rm -rf $(testsBinPath)
+
+cleanall: clean-test clean
+`
+	default:
+	}
 
 	if err := os.WriteFile(filepath.Join(basePath, "Makefile"), []byte(content), 0644); err != nil {
 		return fmt.Errorf("failed to create file Makefile: %v", err)
@@ -340,9 +361,51 @@ func generateBuildSh(m model) error {
 	}
 	content := `#!/bin/bash
 # A simple build script
-` + compilerStr + ` -std=` + string(m.cppStandard) + ` -Iinclude -o main src/main.cpp src/foo/foo.cpp
+` + compilerStr + ` -std=` + string(m.cppStandard) + ` -Iinclude -o build/main src/main.cpp src/foo/foo.cpp
+#!/bin/bash
+# A simple build script
+
+if [[ "$1" == "clean" ]]; then
+  rm -rf build/*
+  exit 0
+fi
+
+if [ ! -d "build" ]; then
+  mkdir build
+fi
+
+if [[ "$1" == "shared" ]]; then
+` + compilerStr + ` -std=` + string(m.cppStandard) + ` -Iinclude -c src/foo/foo.cpp -o build/foo.o
+` + compilerStr + ` -std=` + string(m.cppStandard) + ` -shared -o build/libfoo.so build/foo.o
+` + compilerStr + ` -std=` + string(m.cppStandard) + ` -Iinclude -o build/main src/main.cpp -Lbuild -lfoo -Wl,-rpath,./build
+  exit 0
+fi
+
+if [[ "$1" == "static" ]]; then
+` + compilerStr + ` -std=` + string(m.cppStandard) + ` -Iinclude -c src/foo/foo.cpp -o build/foo.o
+  ar rcs build/libfoo.a build/foo.o
+` + compilerStr + ` -std=` + string(m.cppStandard) + ` -Iinclude -o build/main src/main.cpp -Lbuild -lfoo
+  exit 0
+fi
+
+# Default build step if none of the above conditions are met
+` + compilerStr + ` -std=` + string(m.cppStandard) + ` -Iinclude -o build/main src/main.cpp src/foo/foo.cpp
+
 `
 
+	switch m.testingFramework {
+	case "Google Test":
+		generateTestFiles(m)
+		content += `# tests
+if [[ "$1" == "tests" ]]; then
+` + compilerStr + ` -std=` + string(m.cppStandard) + ` -Iinclude -Itests/unit-tests -o build/foo-tests tests/unit-tests/foo-tests.cpp src/foo/foo.cpp -lgtest -lgtest_main -pthread
+  ./build/foo-tests
+  exit 0
+fi
+
+`
+	default:
+	}
 	if err := os.WriteFile(filepath.Join(basePath, "build.sh"), []byte(content), 0644); err != nil {
 		return fmt.Errorf("failed to create file build.sh: %v", err)
 	}
