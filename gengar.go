@@ -23,7 +23,7 @@ const (
 	Makefile   BuildSystem      = "Makefile"
 	CMake      BuildSystem      = "CMake"
 	BuildSh    BuildSystem      = "build.sh"
-    Premake5   BuildSystem      = "Premake5"
+	Premake5   BuildSystem      = "Premake5"
 	GCC        Compiler         = "GCC"
 	Clang      Compiler         = "Clang"
 	MSVC       Compiler         = "MSVC"
@@ -52,18 +52,18 @@ func initialModel() model {
 
 	// Create a list of options for each step
 	optionsList := map[int][]string{
-		0: {"Premake5","Makefile", "CMake", "build.sh"},
+		0: {"Premake5", "Makefile", "CMake", "build.sh", "None"},
 		1: {"c++17", "c++20", "c++23"},
 		2: {"GCC", "Clang", "MSVC"},
-		//3: {"Google Test", "Catch2", "Boost.Test"},
+		3: {"Google Test", "None"},
 	}
 	return model{
 		currentStep: 0,
-		steps:       []string{"Build System", 
-                            "C++ Standard", 
-                            "Compiler", 
-                        //    "Testing Framework"
-                        },
+		steps: []string{"Build System",
+			"C++ Standard",
+			"Compiler",
+			"Testing Framework",
+		},
 		optionsList: optionsList,
 	}
 }
@@ -129,8 +129,8 @@ func (m *model) handleSelection() {
 		m.cppStandard = CppStandard(m.optionsList[m.currentStep][m.cursor]) // Update the model with the selected C++ standard
 	case "Compiler":
 		m.compiler = Compiler(m.optionsList[m.currentStep][m.cursor]) // Update the model with the selected compiler
-	// case "Testing Framework":
-	// 	m.testingFramework = TestingFramework(m.optionsList[m.currentStep][m.cursor]) // Update the model with the selected testing framework
+	case "Testing Framework":
+		m.testingFramework = TestingFramework(m.optionsList[m.currentStep][m.cursor]) // Update the model with the selected testing framework
 	}
 }
 
@@ -153,22 +153,122 @@ func (m model) View() string {
 	return fmt.Sprintf("%s\n\n%s\n\n%s", stepTitle, listStr, instructions)
 }
 
-func createProjectStructure(m model) error {
-	basePath := filepath.Join(".", m.projectName)
-	// Directories to create
+func createDirectoryStructure(basePath string) error {
 	dirs := []string{
 		"build",
-		filepath.Join("include", "sum"),
-		filepath.Join("src", "sum"),
+		filepath.Join("include", "foo"),
+		filepath.Join("src", "foo"),
 	}
 
 	for _, dir := range dirs {
 		path := filepath.Join(basePath, dir)
 		if err := os.MkdirAll(path, 0755); err != nil {
-			return fmt.Errorf("failed to create directory %s: %v", path, err)
+			return err
 		}
 	}
+	return nil
+}
 
+func generateExampleFiles(basePath string) error {
+	// Base files to create
+	files := map[string]string{
+		filepath.Join("src", "main.cpp"): `#include <iostream>
+#include "foo/foo.hpp"
+
+int main() {
+    std::cout << "Hello, World!" << std::endl;
+    std::cout << "40 + 2 = " << foo::bar(40, 2) << std::endl;
+    return 0;
+}
+`,
+		filepath.Join("src", "foo", "foo.cpp"): `#include "foo/foo.hpp"
+
+namespace foo {
+    int bar(int a, int b) {
+        return a + b;
+    }
+}
+`,
+		filepath.Join("include", "foo", "foo.hpp"): `#pragma once
+
+namespace foo {
+    int bar(int a, int b);
+}
+`,
+	}
+	for filePath, content := range files {
+		fullPath := filepath.Join(basePath, filePath)
+		if err := os.WriteFile(fullPath, []byte(content), 0644); err != nil {
+			return fmt.Errorf("failed to create file %s: %v", fullPath, err)
+		}
+	}
+	return nil
+
+}
+
+func generateCMakeLists(m model) error {
+	fmt.Println("Ignoring Compiler for CMake build system")
+	basePath := filepath.Join(".", m.projectName)
+	content := `cmake_minimum_required(VERSION 3.10)
+project(` + m.projectName + ` VERSION 1.0)
+
+# Specify the C++ standard
+set(CMAKE_CXX_STANDARD ` + strings.Split(string(m.cppStandard), "c++")[1] + `)
+set(CMAKE_CXX_STANDARD_REQUIRED True)
+
+# Include directories
+include_directories(include)
+
+# Create a shared library 'libfoo.so' from 'src/foo/foo.cpp'
+add_library(foo SHARED src/foo/foo.cpp)
+
+# Create the main program executable
+add_executable(main src/main.cpp)
+
+# Link the main program with the foo library
+target_link_libraries(main foo)
+`
+
+	switch m.testingFramework {
+	case "Google Test":
+        generateTestFiles(m)
+		content += `# Add the google test framework as a build dependency
+include(FetchContent)
+FetchContent_Declare(
+  googletest
+  URL https://github.com/google/googletest/archive/03597a01ee50ed33e9dfd640b249b4be3799d395.zip
+)
+set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(googletest)
+
+enable_testing()
+
+# Create a test executable for the foo library
+add_executable(
+  foo-tests
+  tests/unit-tests/foo-tests.cpp
+)
+target_link_libraries(
+  foo-tests
+  GTest::gtest_main
+  foo
+)
+
+include(GoogleTest)
+gtest_discover_tests(foo-tests)
+
+`
+	default:
+	}
+
+	if err := os.WriteFile(filepath.Join(basePath, "CMakeLists.txt"), []byte(content), 0644); err != nil {
+		return fmt.Errorf("failed to create file CMakeLists.txt: %v", err)
+	}
+	return nil
+}
+
+func generateMakefile(m model) error {
+	basePath := filepath.Join(".", m.projectName)
 	compilerStr := ""
 	switch m.compiler {
 	case "GCC":
@@ -180,58 +280,7 @@ func createProjectStructure(m model) error {
 	default:
 		compilerStr = "g++"
 	}
-
-	// Base files to create
-	files := map[string]string{
-		filepath.Join("src", "main.cpp"): `#include <iostream>
-#include "sum/sum.hpp"
-
-int main() {
-    std::cout << "Hello, World!" << std::endl;
-    std::cout << "40 + 2 = " << sum::add(40, 2) << std::endl;
-    return 0;
-}
-`,
-		filepath.Join("src", "sum", "sum.cpp"): `#include "sum/sum.hpp"
-
-namespace sum {
-    int add(int a, int b) {
-        return a + b;
-    }
-}
-`,
-		filepath.Join("include", "sum", "sum.hpp"): `#pragma once
-
-namespace sum {
-    int add(int a, int b);
-}
-`,
-	}
-
-	// Append Build System specific file
-	switch m.buildSystem {
-	case "CMake":
-		files[filepath.Join("CMakeLists.txt")] = `cmake_minimum_required(VERSION 3.10)
-project(` + m.projectName + ` VERSION 1.0)
-
-# Specify the C++ standard
-set(CMAKE_CXX_STANDARD ` + strings.Split(string(m.cppStandard), "c++")[0] + `)
-set(CMAKE_CXX_STANDARD_REQUIRED True)
-
-# Include directories
-include_directories(include)
-
-# Create a shared library 'libsum.so' from 'src/sum/sum.cpp'
-add_library(sum SHARED src/sum/sum.cpp)
-
-# Create the main program executable
-add_executable(main src/main.cpp)
-
-# Link the main program with the sum library
-target_link_libraries(main sum)
-`
-	case "Makefile":
-		files[filepath.Join("Makefile")] = `includePath := include
+	content := `includePath := include
 srcPath := src
 binPath := build/bin
 objPath := build/obj
@@ -243,9 +292,9 @@ LDFLAGS := -L$(libPath) -Wl,-rpath,$(libPath)
 
 # Target names
 EXECUTABLE := $(binPath)/main
-LIBRARY := $(libPath)/libsum.so
+LIBRARY := $(libPath)/libfoo.so
 MAIN_OBJ := $(objPath)/main.o
-SUM_OBJ := $(objPath)/sum.o
+SUM_OBJ := $(objPath)/foo.o
 
 all: directories $(LIBRARY) $(EXECUTABLE)
 
@@ -253,7 +302,7 @@ directories:
 	mkdir -p $(binPath) $(objPath) $(libPath)
 
 $(EXECUTABLE): $(MAIN_OBJ)
-	$(CC) $^ -o $@ $(LDFLAGS) -lsum
+	$(CC) $^ -o $@ $(LDFLAGS) -lfoo
 
 $(MAIN_OBJ): $(srcPath)/main.cpp
 	$(CC) $(CFLAGS) -c $< -o $@
@@ -261,20 +310,51 @@ $(MAIN_OBJ): $(srcPath)/main.cpp
 $(LIBRARY): $(SUM_OBJ)
 	$(CC) -shared $^ -o $@
 
-$(SUM_OBJ): $(srcPath)/sum/sum.cpp
+$(SUM_OBJ): $(srcPath)/foo/foo.cpp
 	$(CC) $(CFLAGS) -c $< -o $@
 
 clean:
 	rm -rf $(binPath) $(objPath) $(libPath)
 
 `
-	case "build.sh":
-		files[filepath.Join("build.sh")] = `#!/bin/bash
+
+	if err := os.WriteFile(filepath.Join(basePath, "Makefile"), []byte(content), 0644); err != nil {
+		return fmt.Errorf("failed to create file Makefile: %v", err)
+	}
+
+	return nil
+}
+
+func generateBuildSh(m model) error {
+	basePath := filepath.Join(".", m.projectName)
+	compilerStr := ""
+	switch m.compiler {
+	case "GCC":
+		compilerStr = "g++"
+	case "Clang":
+		compilerStr = "clang++"
+	case "MSVC":
+		compilerStr = "cl"
+	default:
+		compilerStr = "g++"
+	}
+	content := `#!/bin/bash
 # A simple build script
-` + compilerStr + ` -std=` + string(m.cppStandard) + ` -Iinclude -o main src/main.cpp src/sum/sum.cpp
+` + compilerStr + ` -std=` + string(m.cppStandard) + ` -Iinclude -o main src/main.cpp src/foo/foo.cpp
 `
-    case "Premake5":
-        files[filepath.Join("premake5.lua")] = `workspace "` + m.projectName + `"
+
+	if err := os.WriteFile(filepath.Join(basePath, "build.sh"), []byte(content), 0644); err != nil {
+		return fmt.Errorf("failed to create file build.sh: %v", err)
+	}
+
+	return nil
+
+}
+
+func generatePremake5Lua(m model) error {
+	fmt.Println("Ignoring Compiler for Premake5 build system")
+	basePath := filepath.Join(".", m.projectName)
+	content := `workspace "` + m.projectName + `"
    configurations { "Debug", "Release" }
    architecture "x86_64"
    startproject "MainApp"
@@ -289,13 +369,13 @@ clean:
       cppdialect "` + strings.ToUpper(string(m.cppStandard)) + `"
       buildoptions { "-fPIC" }
 
-project "Sum"
+project "Foo"
    kind "SharedLib"
    language "C++"
    targetdir "bin/%{cfg.buildcfg}"
-   targetname "sum"
+   targetname "foo"
 
-   files { "src/sum/**.cpp", "include/sum/**.h" }
+   files { "src/foo/**.cpp", "include/foo/**.h" }
    includedirs { "include" }
 
    filter "configurations:Debug"
@@ -314,7 +394,7 @@ project "MainApp"
    files { "src/main.cpp" }
    includedirs { "include" }
 
-   links { "Sum" }
+   links { "Foo" }
 
    filter "configurations:Debug"
       defines { "DEBUG" }
@@ -323,22 +403,84 @@ project "MainApp"
    filter "configurations:Release"
       defines { "NDEBUG" }
       optimize "On"
-
 `
-	default:
-		// Handle default case or unsupported build systems
+
+	if err := os.WriteFile(filepath.Join(basePath, "premake5.lua"), []byte(content), 0644); err != nil {
+		return fmt.Errorf("failed to create file premake5.lua: %v", err)
 	}
 
-	for filePath, content := range files {
-		fullPath := filepath.Join(basePath, filePath)
-		if err := os.WriteFile(fullPath, []byte(content), 0644); err != nil {
-			return fmt.Errorf("failed to create file %s: %v", fullPath, err)
-		}
+	return nil
+}
+func createBuildSolution(m model) error {
+	err := error(nil)
+	switch m.buildSystem {
+	case "CMake":
+		err = generateCMakeLists(m)
+	case "Makefile":
+		err = generateMakefile(m)
+	case "build.sh":
+		err = generateBuildSh(m)
+	case "Premake5":
+		err = generatePremake5Lua(m)
+	default:
+		err = generatePremake5Lua(m)
+	}
+	if err != nil {
+		return fmt.Errorf("failed to create build solution: %v", err)
 	}
 
 	return nil
 }
 
+func createProjectStructure(m model) error {
+	basePath := filepath.Join(".", m.projectName)
+	err := createDirectoryStructure(basePath)
+	if err != nil {
+		return fmt.Errorf("failed to create directory structure: %v", err)
+	}
+	err = generateExampleFiles(basePath)
+	if err != nil {
+		return fmt.Errorf("failed to generate example files: %v", err)
+	}
+	err = createBuildSolution(m)
+	if err != nil {
+		return fmt.Errorf("failed to create build solution: %v", err)
+	}
+
+	return nil
+}
+
+func generateTestFiles(m model) error {
+	basePath := filepath.Join(".", m.projectName)
+	content := `#include "gtest/gtest.h"
+#include "foo/foo.hpp"
+
+// Test case for the bar function
+TEST(SumTest, HandlesPositiveInput) {
+    EXPECT_EQ(42, foo::bar(40, 2));
+}
+
+TEST(SumTest, HandlesNegativeInput) {
+    EXPECT_EQ(-1, foo::bar(-3, 2));
+}
+
+TEST(SumTest, HandlesZeroInput) {
+    EXPECT_EQ(0, foo::bar(0, 0));
+}
+`
+
+	testsDir := filepath.Join(basePath, "tests", "unit-tests")
+	if err := os.MkdirAll(testsDir, 0755); err != nil {
+		return fmt.Errorf("failed to create directory %s: %v", testsDir, err)
+	}
+
+	testFilePath := filepath.Join(testsDir, "foo-tests.cpp")
+	if err := os.WriteFile(testFilePath, []byte(content), 0644); err != nil {
+		return fmt.Errorf("failed to create file %s: %v", testFilePath, err)
+	}
+
+	return nil
+}
 func initNewProject(projectName string) {
 	m := initialModel()
 	p := tea.NewProgram(m)
@@ -352,9 +494,15 @@ func initNewProject(projectName string) {
 	if err != nil {
 		fmt.Println(err)
 	}
+	err = createBuildSolution(m)
+	if err != nil {
+		fmt.Println(err)
+	}
+	fmt.Println("Project created successfully")
 }
+
 func showUsage() {
-    fmt.Println("Usage: gengar [init] <project-name>")
+	fmt.Println("Usage: gengar [init] <project-name>")
 }
 
 func main() {
@@ -363,7 +511,7 @@ func main() {
 	if len(os.Args) > 1 {
 		commandOption = os.Args[1]
 	} else {
-        showUsage()
+		showUsage()
 		os.Exit(1)
 	}
 	switch commandOption {
@@ -378,7 +526,8 @@ func main() {
 
 		initNewProject(projectName)
 
-	case "help": showUsage()
+	case "help":
+		showUsage()
 	default:
 		showUsage()
 	}
