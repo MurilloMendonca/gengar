@@ -1,0 +1,7 @@
+
+# tests
+if [[ "$1" == "tests" ]]; then
+{{ .CompileStr }} -std={{ .CppStandard }} -Iinclude -Itests/unit-tests -o build/foo-tests tests/unit-tests/foo-tests.cpp src/foo/foo.cpp -lCatch2Main -lCatch2
+  ./build/foo-tests
+  exit 0
+fi

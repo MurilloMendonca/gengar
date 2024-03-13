@@ -6,7 +6,7 @@ project "FooTests"
     files { "tests/unit-tests/foo-tests.cpp" }
     includedirs { "include" }
 
-    links { "Foo", "gtest", "gtest_main" }
+    links { "Foo", "Catch2Main", "Catch2" }
 
     filter "configurations:Debug"
         defines { "DEBUG" }
@@ -16,3 +16,4 @@ project "FooTests"
         defines { "NDEBUG" }
         optimize "On"
         
+

@@ -1,0 +1,21 @@
+
+# tests using Catch2
+testsPath := tests/unit-tests
+testsBinPath := build/tests
+
+TEST_EXECUTABLE := $(testsBinPath)/unit-tests
+
+test-dir:
+	mkdir -p $(testsBinPath)
+
+test: directories test-dir $(TEST_EXECUTABLE)
+	$(TEST_EXECUTABLE)
+
+$(TEST_EXECUTABLE): $(testsPath)/foo-tests.cpp $(FOO_OBJ)
+	$(CC) $(CFLAGS) $^ -o $@ $(LDFLAGS) -lfoo -lCatch2Main -lCatch2
+
+clean-test:
+	rm -rf $(testsBinPath)
+
+cleanall: clean-test clean
+

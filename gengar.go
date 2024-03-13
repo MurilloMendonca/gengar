@@ -2,11 +2,12 @@ package main
 
 import (
 	"fmt"
-	tea "github.com/charmbracelet/bubbletea"
 	"os"
 	"path/filepath"
 	"strings"
 	"text/template"
+
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 type BuildSystem string
@@ -36,7 +37,7 @@ func initialModel() model {
 		0: {"Premake5", "Makefile", "CMake", "build.sh", "None"},
 		1: {"c++17", "c++20", "c++23"},
 		2: {"GCC", "Clang", "MSVC"},
-		3: {"Google Test", "None"},
+		3: {"Google Test", "Catch2", "None"},
 	}
 	return model{
 		currentStep: 0,
@@ -65,6 +66,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.handleSelection()
 			if m.currentStep < len(m.steps)-1 {
 				m.currentStep++
+                m.cursor = 0
 			} else {
 				return m, tea.Quit
 			}
@@ -205,7 +207,7 @@ func generateCMakeLists(m model) error {
 
 	switch m.testingFramework {
 	case "Google Test":
-		generateTestFiles(m)
+		generateGTestFiles(m)
 		testContent := new(strings.Builder)
 		tmplPath = filepath.Join(templatePath, "CMakeListsGTest.tmpl")
 		tmpl, err = template.New("CMakeListsGTest.tmpl").ParseFiles(tmplPath)
@@ -217,6 +219,19 @@ func generateCMakeLists(m model) error {
 			return fmt.Errorf("failed to execute CMakeListsGTest.tmpl: %v", err)
 		}
 		content.WriteString(testContent.String())
+    case "Catch2":
+        generateCatch2Files(m)
+        testContent := new(strings.Builder)
+        tmplPath = filepath.Join(templatePath, "CMakeListsCatch2.tmpl")
+        tmpl, err = template.New("CMakeListsCatch2.tmpl").ParseFiles(tmplPath)
+        if err != nil {
+            return fmt.Errorf("failed to parse CMakeListsCatch2.tmpl: %v", err)
+        }
+        err = tmpl.Execute(testContent, m)
+        if err != nil {
+            return fmt.Errorf("failed to execute CMakeListsCatch2.tmpl: %v", err)
+        }
+        content.WriteString(testContent.String())
 	default:
 	}
 
@@ -253,31 +268,43 @@ func generateMakefile(m model) error {
 	}
 	data := Data{ProjectName: m.ProjectName, CompileStr: compilerStr, CppStandard: string(m.CppStandard)}
 	err = tmpl.Execute(content, data)
-    if err != nil {
-        return fmt.Errorf("failed to execute Makefile.tmpl: %v", err)
-    }
-
+	if err != nil {
+		return fmt.Errorf("failed to execute Makefile.tmpl: %v", err)
+	}
 
 	switch m.testingFramework {
 	case "Google Test":
-		generateTestFiles(m)
+		generateGTestFiles(m)
+		testContent := new(strings.Builder)
+		tmplPath = filepath.Join(templatePath, "MakefileGTest.tmpl")
+		tmpl, err = template.New("MakefileGTest.tmpl").ParseFiles(tmplPath)
+		if err != nil {
+			return fmt.Errorf("failed to parse MakefileGTest.tmpl: %v", err)
+		}
+		err = tmpl.Execute(testContent, data)
+		if err != nil {
+			return fmt.Errorf("failed to execute MakefileGTest.tmpl: %v", err)
+		}
+		content.WriteString(testContent.String())
+    case "Catch2":
+        generateCatch2Files(m)
         testContent := new(strings.Builder)
-        tmplPath = filepath.Join(templatePath, "MakefileGTest.tmpl")
-        tmpl, err = template.New("MakefileGTest.tmpl").ParseFiles(tmplPath)
+        tmplPath = filepath.Join(templatePath, "MakefileCatch2.tmpl")
+        tmpl, err = template.New("MakefileCatch2.tmpl").ParseFiles(tmplPath)
         if err != nil {
-            return fmt.Errorf("failed to parse MakefileGTest.tmpl: %v", err)
+            return fmt.Errorf("failed to parse MakefileCatch2.tmpl: %v", err)
         }
         err = tmpl.Execute(testContent, data)
         if err != nil {
-            return fmt.Errorf("failed to execute MakefileGTest.tmpl: %v", err)
+            return fmt.Errorf("failed to execute MakefileCatch2.tmpl: %v", err)
         }
         content.WriteString(testContent.String())
 	default:
 	}
 
-    if err := os.WriteFile(filepath.Join(basePath, "Makefile"), []byte(content.String()), 0644); err != nil {
-        return fmt.Errorf("failed to create file Makefile: %v", err)
-    }
+	if err := os.WriteFile(filepath.Join(basePath, "Makefile"), []byte(content.String()), 0644); err != nil {
+		return fmt.Errorf("failed to create file Makefile: %v", err)
+	}
 
 	return nil
 }
@@ -295,43 +322,56 @@ func generateBuildSh(m model) error {
 	default:
 		compilerStr = "g++"
 	}
-    type Data struct {
-        ProjectName string
-        CompileStr  string
-        CppStandard string
-    }
-    data := Data{ProjectName: m.ProjectName, CompileStr: compilerStr, CppStandard: string(m.CppStandard)}
-    tmplPath := filepath.Join(templatePath, "build.sh.tmpl")
-    tmpl, err := template.New("build.sh.tmpl").ParseFiles(tmplPath)
-    if err != nil {
-        return fmt.Errorf("failed to parse build.sh.tmpl: %v", err)
-    }
-    var content = new(strings.Builder)
-    err = tmpl.Execute(content, data)
-    if err != nil {
-        return fmt.Errorf("failed to execute build.sh.tmpl: %v", err)
-    }
+	type Data struct {
+		ProjectName string
+		CompileStr  string
+		CppStandard string
+	}
+	data := Data{ProjectName: m.ProjectName, CompileStr: compilerStr, CppStandard: string(m.CppStandard)}
+	tmplPath := filepath.Join(templatePath, "build.sh.tmpl")
+	tmpl, err := template.New("build.sh.tmpl").ParseFiles(tmplPath)
+	if err != nil {
+		return fmt.Errorf("failed to parse build.sh.tmpl: %v", err)
+	}
+	var content = new(strings.Builder)
+	err = tmpl.Execute(content, data)
+	if err != nil {
+		return fmt.Errorf("failed to execute build.sh.tmpl: %v", err)
+	}
 
 	switch m.testingFramework {
 	case "Google Test":
-		generateTestFiles(m)
+		generateGTestFiles(m)
+		testContent := new(strings.Builder)
+		tmplPath = filepath.Join(templatePath, "buildGTest.tmpl")
+		tmpl, err = template.New("buildGTest.tmpl").ParseFiles(tmplPath)
+		if err != nil {
+			return fmt.Errorf("failed to parse buildGTest.tmpl: %v", err)
+		}
+		err = tmpl.Execute(testContent, data)
+		if err != nil {
+			return fmt.Errorf("failed to execute buildGTest.tmpl: %v", err)
+		}
+		content.WriteString(testContent.String())
+    case "Catch2":
+        generateCatch2Files(m)
         testContent := new(strings.Builder)
-        tmplPath = filepath.Join(templatePath, "buildGTest.tmpl")
-        tmpl, err = template.New("buildGTest.tmpl").ParseFiles(tmplPath)
+        tmplPath = filepath.Join(templatePath, "buildCatch2.tmpl")
+        tmpl, err = template.New("buildCatch2.tmpl").ParseFiles(tmplPath)
         if err != nil {
-            return fmt.Errorf("failed to parse buildGTest.tmpl: %v", err)
+            return fmt.Errorf("failed to parse buildCatch2.tmpl: %v", err)
         }
         err = tmpl.Execute(testContent, data)
         if err != nil {
-            return fmt.Errorf("failed to execute buildGTest.tmpl: %v", err)
+            return fmt.Errorf("failed to execute buildCatch2.tmpl: %v", err)
         }
         content.WriteString(testContent.String())
 	default:
 	}
 
-    if err := os.WriteFile(filepath.Join(basePath, "build.sh"), []byte(content.String()), 0644); err != nil {
-        return fmt.Errorf("failed to create file build.sh: %v", err)
-    }
+	if err := os.WriteFile(filepath.Join(basePath, "build.sh"), []byte(content.String()), 0644); err != nil {
+		return fmt.Errorf("failed to create file build.sh: %v", err)
+	}
 
 	return nil
 
@@ -340,43 +380,56 @@ func generateBuildSh(m model) error {
 func generatePremake5Lua(m model) error {
 	fmt.Println("Ignoring Compiler for Premake5 build system")
 	basePath := filepath.Join(".", m.ProjectName)
-    tmplPath := filepath.Join(templatePath, "premake5.lua.tmpl")
-    tmpl, err := template.New("premake5.lua.tmpl").ParseFiles(tmplPath)
-    if err != nil {
-        return fmt.Errorf("failed to parse premake5.lua.tmpl: %v", err)
-    }
-    var content = new(strings.Builder)
-    type Data struct {
-        ProjectName string
-        CppStandard string
-        Compiler    string
-    }
+	tmplPath := filepath.Join(templatePath, "premake5.lua.tmpl")
+	tmpl, err := template.New("premake5.lua.tmpl").ParseFiles(tmplPath)
+	if err != nil {
+		return fmt.Errorf("failed to parse premake5.lua.tmpl: %v", err)
+	}
+	var content = new(strings.Builder)
+	type Data struct {
+		ProjectName string
+		CppStandard string
+		Compiler    string
+	}
 
-    data := Data{ProjectName: m.ProjectName, 
-                CppStandard: strings.ToUpper(string(m.CppStandard)), 
-                Compiler: m.compiler}
-    err = tmpl.Execute(content, data)
+	data := Data{ProjectName: m.ProjectName,
+		CppStandard: strings.ToUpper(string(m.CppStandard)),
+		Compiler:    m.compiler}
+	err = tmpl.Execute(content, data)
 
 	switch m.testingFramework {
 	case "Google Test":
-		generateTestFiles(m)
+		generateGTestFiles(m)
+		testContent := new(strings.Builder)
+		tmplPath = filepath.Join(templatePath, "premake5GTest.tmpl")
+		tmpl, err = template.New("premake5GTest.tmpl").ParseFiles(tmplPath)
+		if err != nil {
+			return fmt.Errorf("failed to parse premake5GTest.tmpl: %v", err)
+		}
+		err = tmpl.Execute(testContent, data)
+		if err != nil {
+			return fmt.Errorf("failed to execute premake5GTest.tmpl: %v", err)
+		}
+		content.WriteString(testContent.String())
+    case "Catch2":
+        generateCatch2Files(m)
         testContent := new(strings.Builder)
-        tmplPath = filepath.Join(templatePath, "premake5GTest.tmpl")
-        tmpl, err = template.New("premake5GTest.tmpl").ParseFiles(tmplPath)
+        tmplPath = filepath.Join(templatePath, "premake5Catch2.tmpl")
+        tmpl, err = template.New("premake5Catch2.tmpl").ParseFiles(tmplPath)
         if err != nil {
-            return fmt.Errorf("failed to parse premake5GTest.tmpl: %v", err)
+            return fmt.Errorf("failed to parse premake5Catch2.tmpl: %v", err)
         }
         err = tmpl.Execute(testContent, data)
         if err != nil {
-            return fmt.Errorf("failed to execute premake5GTest.tmpl: %v", err)
+            return fmt.Errorf("failed to execute premake5Catch2.tmpl: %v", err)
         }
         content.WriteString(testContent.String())
 	default:
 	}
 
-    if err := os.WriteFile(filepath.Join(basePath, "premake5.lua"), []byte(content.String()), 0644); err != nil {
-        return fmt.Errorf("failed to create file premake5.lua: %v", err)
-    }
+	if err := os.WriteFile(filepath.Join(basePath, "premake5.lua"), []byte(content.String()), 0644); err != nil {
+		return fmt.Errorf("failed to create file premake5.lua: %v", err)
+	}
 
 	return nil
 }
@@ -392,7 +445,6 @@ func createBuildSolution(m model) error {
 	case "Premake5":
 		err = generatePremake5Lua(m)
 	default:
-		err = generatePremake5Lua(m)
 	}
 	if err != nil {
 		return fmt.Errorf("failed to create build solution: %v", err)
@@ -419,7 +471,7 @@ func createProjectStructure(m model) error {
 	return nil
 }
 
-func generateTestFiles(m model) error {
+func generateGTestFiles(m model) error {
 	basePath := filepath.Join(".", m.ProjectName)
 	content := `#include "gtest/gtest.h"
 #include "foo/foo.hpp"
@@ -437,6 +489,40 @@ TEST(SumTest, HandlesZeroInput) {
     EXPECT_EQ(0, foo::bar(0, 0));
 }
 `
+
+	testsDir := filepath.Join(basePath, "tests", "unit-tests")
+	if err := os.MkdirAll(testsDir, 0755); err != nil {
+		return fmt.Errorf("failed to create directory %s: %v", testsDir, err)
+	}
+
+	testFilePath := filepath.Join(testsDir, "foo-tests.cpp")
+	if err := os.WriteFile(testFilePath, []byte(content), 0644); err != nil {
+		return fmt.Errorf("failed to create file %s: %v", testFilePath, err)
+	}
+
+	return nil
+}
+
+func generateCatch2Files(m model) error {
+    basePath := filepath.Join(".", m.ProjectName)
+    content := `#include <catch2/catch_test_macros.hpp>
+#include "foo/foo.hpp"
+
+// Test case for the bar function
+TEST_CASE("SumTest HandlesPositiveInput", "[SumTest]") {
+    REQUIRE(foo::bar(40, 2) == 42);
+}
+
+TEST_CASE("SumTest HandlesNegativeInput", "[SumTest]") {
+    REQUIRE(foo::bar(-3, 2) == -1);
+}
+
+TEST_CASE("SumTest HandlesZeroInput", "[SumTest]") {
+    REQUIRE(foo::bar(0, 0) == 0);
+}
+
+`
+
 
 	testsDir := filepath.Join(basePath, "tests", "unit-tests")
 	if err := os.MkdirAll(testsDir, 0755); err != nil {
@@ -475,15 +561,10 @@ func showUsage() {
 }
 
 func main() {
-
-    // TemplatePath points to the local directory if a directory named "templates" exists on
-    // the same level as the executable. If the directory does not exist, it points to the
-    // /usr/local/share/gengar/templates directory
-    if _, err := os.Stat(templatePath); os.IsNotExist(err) {
-        fmt.Println("Local templates directory not found. Using default templates")
-        templatePath = filepath.Join("/usr/local/share/gengar", "templates")
-    }
-
+	if _, err := os.Stat(templatePath); os.IsNotExist(err) {
+		fmt.Println("Local templates directory not found. Using default templates")
+		templatePath = filepath.Join("/usr/local/share/gengar", "templates")
+	}
 
 	ProjectName := ""
 	commandOption := ""
