@@ -118,22 +118,23 @@ func (m *model) handleSelection() {
 }
 
 func (m model) View() string {
-	// Display the current step and instructions
-	stepTitle := "Step: " + m.steps[m.currentStep]
-	instructions := "Use arrow keys to select, enter to confirm, 'n' for next, 'p' for previous, 'q' to quit."
+     // Display the current step and instructions with color
+    stepTitle := fmt.Sprintf("\033[38;5;147mStep: %s\033[0m", m.steps[m.currentStep])
 
-	// Render the list
-	listStr := ""
-	for i, option := range m.optionsList[m.currentStep] {
-		if i == m.cursor {
-			listStr += ">" // Add a cursor to the selected option
-		} else {
-			listStr += " "
-		}
-		listStr += " " + option + "\n"
-	}
+    instructions := "\033[38;5;210mUse arrow keys to select, enter to confirm, 'n' for next, 'p' for previous, 'q' to quit.\033[0m"
 
-	return fmt.Sprintf("%s\n\n%s\n\n%s", stepTitle, listStr, instructions)
+    // Render the list with color
+    listStr := ""
+    for i, option := range m.optionsList[m.currentStep] {
+        if i == m.cursor {
+            listStr += "\033[38;5;99m> " // Add a cursor to the selected option with color
+        } else {
+            listStr += "\033[38;5;99m  "
+        }
+        listStr += option + "\033[0m\n" // Reset color at the end of each option
+    }
+
+    return fmt.Sprintf("%s\n\n%s\n\n%s", stepTitle, listStr, instructions)
 }
 
 func createDirectoryStructure(basePath string) error {
@@ -546,10 +547,6 @@ func initNewProject(ProjectName string) {
 	m = output.(model)
 	m.ProjectName = ProjectName
 	err = createProjectStructure(m)
-	if err != nil {
-		fmt.Println(err)
-	}
-	err = createBuildSolution(m)
 	if err != nil {
 		fmt.Println(err)
 	}
