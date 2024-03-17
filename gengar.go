@@ -8,6 +8,7 @@ import (
 	"text/template"
 
 	tea "github.com/charmbracelet/bubbletea"
+    "github.com/yuin/gopher-lua"
 )
 
 type BuildSystem string
@@ -29,6 +30,7 @@ type model struct {
 }
 
 var templatePath = filepath.Join(".", "templates")
+var scriptsPath = filepath.Join(".", "scripts")
 
 func initialModel() model {
 
@@ -559,9 +561,12 @@ func showUsage() {
 
 func main() {
 	if _, err := os.Stat(templatePath); os.IsNotExist(err) {
-		fmt.Println("Local templates directory not found. Using default templates")
 		templatePath = filepath.Join("/usr/local/share/gengar", "templates")
 	}
+
+    if _, err := os.Stat(scriptsPath); os.IsNotExist(err) {
+        scriptsPath = filepath.Join("/usr/local/share/gengar", "scripts")
+    }
 
 	ProjectName := ""
 	commandOption := ""
@@ -586,7 +591,20 @@ func main() {
 	case "help":
 		showUsage()
 	default:
-		showUsage()
+		// Search for a lua file on the scrips directory
+        // If the file is found, execute it 
+
+        L := lua.NewState()
+        defer L.Close()
+        if err := L.DoFile(filepath.Join(scriptsPath, commandOption + ".lua")); err != nil {
+            if err.Error() == "open scripts/" + commandOption + ".lua: no such file or directory" {    
+                fmt.Println("Command not found")
+                showUsage()
+            } else {
+                fmt.Println("Error executing script: ", err)
+            }
+        }
+
 	}
 
 }

@@ -2,7 +2,10 @@ module main
 
 go 1.22.1
 
-require github.com/charmbracelet/bubbletea v0.25.0
+require (
+	github.com/charmbracelet/bubbletea v0.25.0
+	github.com/yuin/gopher-lua v1.1.1
+)
 
 require (
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
