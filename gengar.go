@@ -559,6 +559,17 @@ func showUsage() {
 	fmt.Println("Usage: gengar [init] <project-name>")
 }
 
+var argIndex = 1
+func GetArg(L *lua.LState) int {
+    argIndex++
+    if len(os.Args) > argIndex {
+        L.Push(lua.LString(os.Args[argIndex]))
+        return 1
+    }
+    return 0
+}
+
+
 func main() {
 	if _, err := os.Stat(templatePath); os.IsNotExist(err) {
 		templatePath = filepath.Join("/usr/local/share/gengar", "templates")
@@ -596,6 +607,7 @@ func main() {
 
         L := lua.NewState()
         defer L.Close()
+        L.SetGlobal("getArg", L.NewFunction(GetArg))
         if err := L.DoFile(filepath.Join(scriptsPath, commandOption + ".lua")); err != nil {
             if err.Error() == "open scripts/" + commandOption + ".lua: no such file or directory" {    
                 fmt.Println("Command not found")
