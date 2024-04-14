@@ -230,10 +230,12 @@ local function buildObjectFiles(baseCmd, module)
     if module.preBuildCommands then
         return module.preBuildCommands(runCmd, module)
     end
-    for _, src in ipairs(module.sources) do
-        local srcFiles = getSrcFilesFromPath(src)
-        for _, srcFilePath in ipairs(srcFiles) do
-            buildDotOForFile(baseCmd, srcFilePath, module)
+    if module.sources then
+        for _, src in ipairs(module.sources) do
+            local srcFiles = getSrcFilesFromPath(src)
+            for _, srcFilePath in ipairs(srcFiles) do
+                buildDotOForFile(baseCmd, srcFilePath, module)
+            end
         end
     end
 end
@@ -355,10 +357,12 @@ local function build(project)
         for _, module in ipairs(project.modules) do
             local moduleCmd = cmd
             local includeSet = {}
-            for _, include in ipairs(module.include) do
-                if not contains(includeSet, include) then
-                    includeSet[#includeSet + 1] = include
-                    moduleCmd = moduleCmd .. " -I" .. include
+            if module.include then
+                for _, include in ipairs(module.include) do
+                    if not contains(includeSet, include) then
+                        includeSet[#includeSet + 1] = include
+                        moduleCmd = moduleCmd .. " -I" .. include
+                    end
                 end
             end
 
@@ -461,18 +465,30 @@ local function genMakefile(project)
 
     local dynLibs, staticLibs, execs = mapModulesByType(project.modules)
     makefile:write("\ndynamicLibs: ")
-    for _, mod in ipairs(dynLibs) do
-        makefile:write(mod.output .. ".so ")
+    if dynLibs then
+        for _, mod in ipairs(dynLibs) do
+            if mod.output then
+                makefile:write(mod.output .. ".so ")
+            end
+        end
     end
 
     makefile:write("\nstaticLibs: ")
-    for _, mod in ipairs(staticLibs) do
-        makefile:write(mod.output .. ".a ")
+    if staticLibs then
+        for _, mod in ipairs(staticLibs) do
+            if mod.output then
+                makefile:write(mod.output .. ".a ")
+            end
+        end
     end
 
     makefile:write("\nexecutables: ")
-    for _, mod in ipairs(execs) do
-        makefile:write(mod.output .. " ")
+    if execs then
+        for _, mod in ipairs(execs) do
+            if mod.output then
+                makefile:write(mod.output .. " ")
+            end
+        end
     end
 
 
