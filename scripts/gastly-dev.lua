@@ -402,17 +402,6 @@ local function clean(project)
     end
 end
 
-local function returnRequireIfExist(name, fallback)
-    if name == nil or name == "" then
-        print("No lua file provided, searching for fallback")
-        return require("gastly")
-    else
-        if endsWith(name, ".lua") then
-            name = string.sub(name, 1, #name - 4)
-        end
-        return require(name)
-    end
-end
 
 
 local shOutputFile = nil
@@ -533,6 +522,17 @@ local function genMakefile(project)
     makefile:close()
 end
 
+local function returnRequireIfExist(name, fallback)
+    if name == nil or name == "" then
+        print("No lua file provided, searching for fallback")
+        return require(fallback)
+    else
+        if endsWith(name, ".lua") then
+            name = string.sub(name, 1, #name - 4)
+        end
+        return require(name)
+    end
+end
 local index = 0
 if getArg == nil then
     getArg = function()

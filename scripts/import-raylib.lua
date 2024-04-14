@@ -34,5 +34,12 @@ local tinyLibFromGit = {
     libPath="tiny-libs-git/",
 }
 
-local libs = {tinyLibFromGit, raylib, tinyLib}
+local raygui = {
+    url= "https://raw.githubusercontent.com/raysan5/raygui/master/src/raygui.h",
+    name = "raygui",
+    includePath="raygui/",
+    libPath="raygui/",
+}
+
+local libs = {tinyLibFromGit, raylib, tinyLib, raygui}
 return libs
