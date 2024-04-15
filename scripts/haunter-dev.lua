@@ -83,29 +83,62 @@ local function untarFile(path, dest)
     dest = dest or "dependencies"
     runCmd("tar -xvzf " .. path .. " -C " .. dest .. " --strip-components=1")
 end
+local function folderAlreadyExists(path)
+    assert(type(path) == "string", "path must be a string")
+    local code, _, _ = runCmd("ls " .. path)
+    return code == 0
+end
 local function import(lib)
     assert(type(lib) == "table", "lib parameter must be a table")
     assert(type(lib.url) == "string", "url parameter must be a string")
     assert(type(lib.name) == "string", "name parameter must be a string")
     assert(type(lib.includePath) == "string", "includePath parameter must be a string")
     assert(type(lib.libPath) == "string", "libPath parameter must be a string")
+    if folderAlreadyExists("dependencies/" .. lib.includePath) and
+        folderAlreadyExists("dependencies/"..lib.libPath)then
+        print("Library already exists")
+        return 0
+    end
     local localDir = "dependencies/" .. lib.name
     mkdirIfNotExists(localDir)
-    if lib.isGit then
+
+    -- Fist Step: Download the file
+    if lib.downloadCommands then
+        if lib.downloadCommands(localDir) then
+            print("Download commands executed successfully")
+        else
+            print("Failed to execute download commands")
+            return 1
+        end
+    elseif lib.isGit then
         gitClone(lib.url, localDir)
     elseif endsWith(lib.url, ".zip") then
         downloadFile(lib.url, localDir .. ".zip")
-        unzipFile(localDir .. ".zip", localDir)
-        runCmd("rm " .. localDir .. ".zip")
     elseif endsWith(lib.url, ".tar.gz") then
         downloadFile(lib.url, localDir .. ".tar.gz")
-        untarFile(localDir .. ".tar.gz", localDir)
-        runCmd("rm " .. localDir .. ".tar.gz")
     else
         print("Unsupported file format, just downloading")
         downloadFile(lib.url, localDir .."/" ..getFileNameFromUrl(lib.url))
     end
 
+    -- Second Step: Unpack/move the files to the correct location
+    if lib.unpackCommands then
+        if lib.unpackCommands(localDir) then
+            print("Unpack commands executed successfully")
+        else
+            print("Failed to execute unpack commands")
+            return 1
+        end
+    elseif endsWith(lib.url, ".zip") then
+        unzipFile(localDir .. ".zip", localDir)
+        runCmd("rm " .. localDir .. ".zip")
+    elseif endsWith(lib.url, ".tar.gz") then
+        untarFile(localDir .. ".tar.gz", localDir)
+        runCmd("rm " .. localDir .. ".tar.gz")
+    end
+
+
+    -- Third Step: Execute build commands
     if lib.buildCommands then
         if lib.buildCommands(localDir) then
             print("Build commands executed successfully")
