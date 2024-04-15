@@ -29,6 +29,19 @@ local function stringContains(base, substring)
     return string.find(base, substring, 1, true) ~= nil
 end
 
+local function stringAppend(base, toAppend)
+    assert(type(base) == "string", "Base parameter must be a string")
+    assert(type(toAppend) == "string" or type(toAppend) == "table", "toAppend parameter must be a string or a table")
+    if type(toAppend) == "string" then
+        return base .. toAppend
+    elseif type(toAppend) == "table" then
+        for _, v in ipairs(toAppend) do
+            base = base .. v
+        end
+    end
+    return base
+end
+
 local function getNextWord(str, start)
     assert(type(str) == "string", "str parameter must be a string")
     assert(type(start) == "number", "start parameter must be a number")
@@ -364,17 +377,36 @@ local function symlinkDepsLibsToBuild(links)
     end
 end
 
+
+local function getBaseModuleCmd(module, project, haunterIncludes)
+    local moduleCmd = ""
+    if module.compiler then
+        moduleCmd = module.compiler .. " "
+    else
+        moduleCmd = project.compiler .. " "
+    end
+    if module.flags then
+        moduleCmd = moduleCmd .. module.flags
+    else
+        moduleCmd = moduleCmd .. project.flags
+    end
+    -- Add includes from haunter again
+    if haunterIncludes and haunterIncludes ~= "" then
+        moduleCmd = addIncludesToCmd(moduleCmd, haunterIncludes, "dependencies/")
+    end
+    return moduleCmd
+end
+
 local function build(project)
     mkdirIfNotExists("build")
-    local cmd = project.compiler .. " " .. project.flags
     local links, includes = getLinksAndIncludesFromHaunter()
-    cmd = addIncludesToCmd(cmd, includes, "dependencies/")
-    -- cmd = addLibPathsToCmd(cmd, links, "dependencies/")
-    symlinkDepsLibsToBuild(links)
+    if links and links ~= "" then
+        symlinkDepsLibsToBuild(links)
+    end
 
     if project.modules ~= nil then
         for _, module in ipairs(project.modules) do
-            local moduleCmd = cmd
+            local moduleCmd = getBaseModuleCmd(module, project, includes)
             local includeSet = {}
             if module.include then
                 for _, include in ipairs(module.include) do
@@ -389,12 +421,12 @@ local function build(project)
         end
         for _, module in ipairs(project.modules) do
             if not module.executable then
-                buildModule(cmd, module)
+                buildModule(getBaseModuleCmd(module, project, includes), module)
             end
         end
         for _, module in ipairs(project.modules) do
             if module.executable then
-                buildModule(cmd, module)
+                buildModule(getBaseModuleCmd(module, project, includes), module)
             end
         end
     end

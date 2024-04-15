@@ -26,6 +26,7 @@ return {
         {
             name = "Final Dyn Executable",
             version = "0.1.0",
+            compiler = "gcc",
             sources = {
                 "src",
             },
