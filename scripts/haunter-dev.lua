@@ -1,4 +1,4 @@
-local function runCmd(cmd, obj)
+local function runCmd(cmd)
     print(cmd)
     local code, _, _ = os.execute(cmd)
     if (code) then
@@ -85,8 +85,15 @@ local function untarFile(path, dest)
 end
 local function folderAlreadyExists(path)
     assert(type(path) == "string", "path must be a string")
-    local code, _, _ = runCmd("ls " .. path)
-    return code == 0
+    local fileHandle = io.open(path, "r")
+    if fileHandle then
+        local ok, err, code = fileHandle:read(0) -- Try to read from the folder
+        fileHandle:close()
+        if ok or code == 21 then -- Code 21 is 'Is a directory' on some systems
+            return true
+        end
+    end
+    return false
 end
 local function import(lib)
     assert(type(lib) == "table", "lib parameter must be a table")
@@ -162,9 +169,59 @@ local function info(libs)
     end
 end
 
-local function clean(project)
+local function show()
+    print([[
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢠⣿⣿⣷⣤⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⣿⣧⡉⠻⢿⣷⣤⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢻⣿⣷⡀⠀⠉⠻⢿⣷⣤⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣀⣠⣤⣤⣶⡆
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⣿⣿⣷⡀⠀⠀⠀⠉⠻⢿⣷⣤⡀⠀⠀⠀⣀⣀⣠⣤⣤⣤⣤⣀⣀⣀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣀⣠⣤⣶⣶⡿⠿⠛⣻⣽⣿⡿⠀
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢹⣿⡽⣧⠀⠀⠀⠀⠀⠀⠉⢻⣿⣷⡾⠿⠛⠛⠉⠉⠉⠉⠉⠙⠛⠻⠿⣶⣦⣄⣤⣴⣶⣿⠿⠟⠛⠉⠁⠀⠀⣠⣾⣿⣿⠟⠀⠀
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢿⣷⢻⡆⠀⠀⠀⠀⠀⢰⡿⠛⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠾⠿⠛⠋⠉⠀⠀⠀⠀⠀⠀⠀⢀⣴⣿⣿⡿⠋⠀⠀⠀
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠸⣿⡾⣷⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢠⣾⣿⣿⠟⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣶⣶⣤⣤⣀⣀⠀⢻⣿⣿⠀⣤⣄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣠⣤⠀⠀⠀⠀⠀⠀⠀⠀⢠⣿⣿⡿⠋⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠻⣿⣯⣍⠛⠛⠿⠿⣿⣿⠀⢹⣿⣦⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣠⣾⡿⣿⡍⠀⠀⠀⠀⠀⠀⠀⠀⣾⣿⡟⠁⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠙⣿⣿⣷⣄⠀⠀⠘⠋⠀⣾⣿⣿⣷⡄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣴⣿⡟⠁⠀⣿⡇⠀⠀⠀⠀⠀⠀⠀⣾⡟⠛⠛⠛⠛⠛⠛⣛⣻⣿⡿
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⢿⣿⣿⣷⡀⠀⠀⠀⢿⡏⠈⠻⣿⡄⠀⠀⠀⠀⠀⠀⠀⢀⣴⡿⠋⠀⠀⠀⠀⣿⡇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣠⣴⣿⣿⡿⠋⠁
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠻⣿⣾⣿⡄⠀⠀⢸⣿⣄⠀⣿⣿⡄⠀⠀⠀⠀⠀⣴⣿⢯⡄⠀⠀⠀⠀⢠⣿⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣠⣾⣿⣿⠟⠁⠀⠀⠀
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠙⢿⣿⣷⠀⠀⠀⠙⠻⠿⢿⣿⣿⠀⠀⠀⠀⣼⣿⣥⣼⣿⣤⣤⣶⣾⠿⠋⠀⢀⡀⠀⠀⠀⠀⠀⠀⠀⣼⣿⣿⠟⠁⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣴⣶⡶⠿⠿⠿⣿⠀⠿⣷⣦⣤⣄⣀⣀⠀⠀⠀⠀⠀⠉⠉⠉⠉⠉⢉⣀⣀⣤⣤⣴⣶⡿⠟⠀⠀⠀⠀⠀⠀⣴⣿⣿⣧⣤⣤⣄⣀⠀⠀⠀
+⠀⠀⠀⠀⠀⢀⣤⣾⠟⠻⠿⢷⣶⣆⠈⠻⣿⣷⣶⣤⣀⠀⠀⠸⣿⣿⣿⠿⢿⣿⣻⣿⣧⣿⣟⣻⣿⣶⣾⠿⣿⣿⣿⠋⣽⡿⠃⠀⠀⠀⠀⠀⠀⠀⠉⠁⠀⣠⣬⣿⣿⠿⠃⠀⠀
+⠀⠀⠀⠀⣴⣿⠟⠁⠀⠀⠀⠀⠈⠻⣷⡄⠀⠙⠿⣿⣿⣿⣦⡀⠘⢿⣯⣤⣤⣻⣿⡟⠘⠛⢿⣿⠇⠀⠶⠶⣾⣿⣷⣾⠟⠁⠀⠀⠀⠀⠀⠀⠀⠀⢀⣴⣿⣿⣿⠛⠁⠀⠀⠀⠀
+⠀⠀⠀⢸⣿⣇⠀⣀⣴⣿⣿⣷⣦⡀⣙⣿⣦⡀⠀⠈⠻⢿⣿⣿⣦⡈⠛⢿⣾⣿⣿⣧⣾⣷⣸⣿⣤⣿⣤⣠⣴⡿⠟⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⣼⡿⠛⠛⠛⢿⣷⡄⠀⠀⠀⠀
+⠀⢀⣠⣬⣿⡟⠛⣻⣿⡿⠟⣿⣿⣿⠿⠿⠿⠿⠶⠶⢶⣶⡝⠻⣿⣿⣄⠀⠀⠘⠋⠻⠏⠻⠿⠙⠿⠋⠛⠋⠉⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣼⡿⠁⠀⠀⠀⠀⢻⣿⡄⠀⠀⠀
+⢠⣿⠟⠉⢹⣷⣠⣿⠋⠀⣸⡿⢋⣁⣀⢀⣀⠀⠀⠀⠀⢹⣿⠀⠈⠹⣿⣷⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣀⠀⣀⣠⣴⣾⠿⠋⠀⣦⡀⠀⠀⠀⠀⢿⣷⠀⠀⠀
+⣿⣏⣀⣴⣶⣿⣿⡟⠀⢠⣿⣿⣿⣿⣿⣾⣭⣛⡀⠀⢰⣿⣿⠀⠀⠀⠈⠻⣿⣦⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣴⣿⠟⠛⠛⠛⠉⠀⠀⢀⣼⡿⣿⡀⠀⠀⢀⣿⡟⠀⠀⠀
+⢻⣿⡉⢹⣿⠛⢿⣷⣄⡛⠛⠛⣁⣀⠀⣨⣿⡿⠛⠿⠿⠛⠁⠀⠀⠀⠀⠀⠈⠻⣿⣷⣦⣤⣀⠀⠀⠀⠀⠀⠀⣴⡿⠋⠀⠀⠀⠀⣀⡀⣀⣴⡿⠋⠶⣿⣿⣦⣴⣿⠟⠀⠀⠀⠀
+⠀⠹⣿⣾⣿⠀⠀⠈⠻⠿⠿⠿⠛⠛⠛⠛⠉⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠛⢿⣿⣿⣟⠿⠶⠀⢠⣤⣿⡇⠀⠀⠀⠀⣠⣿⠟⠋⠁⠀⠀⢠⣿⣷⣿⠟⠻⣷⣤⡀⠀⠀
+⠀⠀⠈⠛⠿⠇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠉⠛⢿⣿⣶⣤⣀⠀⢹⣿⣶⣤⣴⡿⠟⢿⣶⣦⣴⣶⠿⠘⢛⣿⣦⡀⠀⠈⠻⣿⡆⠀
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠙⠻⢿⣿⣶⣿⣷⣼⡿⠁⠀⠀⢰⣮⣿⣿⡛⠛⠛⠛⢿⣷⣄⠀⠀⣿⡇⠀
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠙⢿⣿⣷⣴⣶⣤⣈⢿⣿⡿⠇⠀⠀⠀⢀⣿⣿⣄⣀⣿⡇⠀
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠉⠉⠛⢿⣿⠻⣷⣿⣷⡄⠀⠀⢰⣿⣯⣾⡿⠟⠋⠀⠀
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠙⠿⣿⣧⠀⠈⠉⠉⠀⠀⠀⠀⠀⠀]])
+end
+
+local function clean()
     runCmd("rm -rf dependencies")
 end
+
+local shFile = nil
+local function genSh(projects)
+    shFile = io.open("gen-dependencies.sh", "w")
+    if shFile == nil then
+        print("Failed to create file")
+        return 1
+    end
+    shFile:write("#!/bin/bash\n")
+    runCmd = function(cmd)
+        shFile:write(cmd .. "\n")
+    end
+    for _, project in ipairs(projects) do
+        import(project)
+    end
+    shFile:close()
+end
+
+
 local function returnRequireIfExist(name, fallback)
     if name == nil or name == "" then
         print("No lua file provided, searching for fallback")
@@ -196,12 +253,18 @@ if (command == "info") then
     local luaFile = getArg()
     local project = returnRequireIfExist(luaFile, "haunter")
     info(project)
+elseif (command == "show") then
+    show()
 elseif (command == "get") then
     local luaFile = getArg()
     local projects = returnRequireIfExist(luaFile, "haunter")
     for _, project in ipairs(projects) do
         import(project)
     end
+elseif (command == "gen") then
+    local luaFile = getArg()
+    local projects = returnRequireIfExist(luaFile, "haunter")
+    genSh(projects)
 elseif (command == "clean") then
     clean()
 else
