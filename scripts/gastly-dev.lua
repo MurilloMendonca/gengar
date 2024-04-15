@@ -18,10 +18,29 @@ local function contains(table, element)
     return false
 end
 
+local function trim(str)
+    assert(type(str) == "string", "str parameter must be a string")
+    return string.match(str, "^%s*(.-)%s*$")
+end
+
 local function stringContains(base, substring)
     assert(type(base) == "string", "Base parameter must be a string")
     assert(type(substring) == "string", "Substring parameter must be a string")
     return string.find(base, substring, 1, true) ~= nil
+end
+
+local function getNextWord(str, start)
+    assert(type(str) == "string", "str parameter must be a string")
+    assert(type(start) == "number", "start parameter must be a number")
+    local finish = start
+    for i = start + 1, #str do
+        finish = finish + 1
+        local c = string.sub(str, i, i)
+        if c == " " or c == nil then
+            return trim(string.sub(str, start, finish - 1)), finish
+        end
+    end
+    return trim(string.sub(str, start, finish)), finish
 end
 
 local function isSrcFile(file)
@@ -262,7 +281,7 @@ local function buildExecutable(baseCmd, module)
         cmdForDotExe = cmdForDotExe .. " -Wl,-rpath=" .. os.getenv("PWD") .. "/build"
     end
 
-    runCmd(cmdForDotExe)
+    runCmd(cmdForDotExe, module)
 end
 
 local function buildModule(cmd, module)
@@ -390,11 +409,13 @@ local function clean(project)
     if project then
         if project.modules then
             for _, module in ipairs(project.modules) do
-                for _, src in ipairs(module.sources) do
-                    local srcFiles = getSrcFilesFromPath(src)
-                    for _, srcFilePath in ipairs(srcFiles) do
-                        cmd = "rm -f " .. srcFilePath .. ".o"
-                        runCmd(cmd)
+                if module.sources then
+                    for _, src in ipairs(module.sources) do
+                        local srcFiles = getSrcFilesFromPath(src)
+                        for _, srcFilePath in ipairs(srcFiles) do
+                            cmd = "rm -f " .. srcFilePath .. ".o"
+                            runCmd(cmd)
+                        end
                     end
                 end
             end
@@ -486,35 +507,22 @@ local function genMakefile(project)
             compile_commands[#compile_commands + 1] = {
                 command = cmd, file = obj.output, directory = os.getenv("PWD") }
         end
-
-        --TODO: try to remove this gambiarra
         if stringContains(cmd, "-o ") then
             local _, start = string.find(cmd, "-o ")
-            local finish = start
-            for i = start + 1, #cmd do
-                finish = finish + 1
-                local c = string.sub(cmd, i, i)
-                if ((c == " " or c == nil) and ((finish - start) > 1)) then
-                    local out = string.sub(cmd, start + 1, finish - 1)
-                    makefile:write("\n" .. out .. ":\n\t" .. cmd)
-                    return
+            local out = getNextWord(cmd, start)
+            makefile:write("\n" .. out .. ":")
+            if obj and stringContains(out, obj.output) then
+                for _, src in ipairs(obj.sources) do
+                    local srcFiles = getSrcFilesFromPath(src)
+                    for _, srcFilePath in ipairs(srcFiles) do
+                        makefile:write(" " .. srcFilePath .. ".o")
+                    end
                 end
             end
-            local out = string.sub(cmd, start + 1, finish)
-            makefile:write("\n" .. out .. ":\n\t" .. cmd)
+            makefile:write("\n\t" .. cmd)
         elseif stringContains(cmd, "ar rcs ") then
             local _, start = string.find(cmd, "ar rcs ")
-            local finish = start
-            for i = start + 1, #cmd do
-                finish = finish + 1
-                local c = string.sub(cmd, i, i)
-                if ((c == " " or c == nil) and ((finish - start) > 1)) then
-                    local out = string.sub(cmd, start + 1, finish - 1)
-                    makefile:write("\n" .. out .. ":\n\t" .. cmd)
-                    return
-                end
-            end
-            local out = string.sub(cmd, start + 1, finish)
+            local out = getNextWord(cmd, start)
             makefile:write("\n" .. out .. ":\n\t" .. cmd)
         end
     end
