@@ -145,6 +145,21 @@ local function isDirectory(path)
     end
 end
 
+local function mapModulesByType(modules)
+    local dynLibs = {}
+    local staticLibs = {}
+    local executables = {}
+    for _, mod in ipairs(modules) do
+        if mod.executable then
+            executables[#executables + 1] = mod
+        elseif mod.static then
+            staticLibs[#staticLibs + 1] = mod
+        else
+            dynLibs[#dynLibs + 1] = mod
+        end
+    end
+    return dynLibs, staticLibs, executables
+end
 
 local function printIfNotNil(value, prefix)
     if value then
@@ -337,14 +352,6 @@ local function addIncludesToCmd(cmd, includes, prefix)
     return cmd
 end
 
-local function addLibPathsToCmd(cmd, includes, prefix)
-    prefix = prefix or ""
-    for _, include in ipairs(includes) do
-        cmd = cmd .. " -L" .. prefix .. include
-    end
-    return cmd
-end
-
 local function isLibrary(lib)
     return stringContains(lib, ".a") or stringContains(lib, ".so")
 end
@@ -404,8 +411,15 @@ local function build(project)
         symlinkDepsLibsToBuild(links)
     end
 
-    if project.modules ~= nil then
-        for _, module in ipairs(project.modules) do
+    if project.modules == nil then
+        print("No modules found in project")
+        return
+    end
+
+    local dynLibs, staticLibs, executables = mapModulesByType(project.modules)
+
+    if dynLibs then
+        for _, module in ipairs(dynLibs) do
             local moduleCmd = getBaseModuleCmd(module, project, includes)
             local includeSet = {}
             if module.include then
@@ -416,18 +430,40 @@ local function build(project)
                     end
                 end
             end
-
             buildObjectFiles(moduleCmd, module)
+            buildModule(moduleCmd, module)
         end
-        for _, module in ipairs(project.modules) do
-            if not module.executable then
-                buildModule(getBaseModuleCmd(module, project, includes), module)
+    end
+    if staticLibs then
+        for _, module in ipairs(staticLibs) do
+            local moduleCmd = getBaseModuleCmd(module, project, includes)
+            local includeSet = {}
+            if module.include then
+                for _, include in ipairs(module.include) do
+                    if not contains(includeSet, include) then
+                        includeSet[#includeSet + 1] = include
+                        moduleCmd = moduleCmd .. " -I" .. include
+                    end
+                end
             end
+            buildObjectFiles(moduleCmd, module)
+            buildModule(moduleCmd, module)
         end
-        for _, module in ipairs(project.modules) do
-            if module.executable then
-                buildModule(getBaseModuleCmd(module, project, includes), module)
+    end
+    if executables then
+        for _, module in ipairs(executables) do
+            local moduleCmd = getBaseModuleCmd(module, project, includes)
+            local includeSet = {}
+            if module.include then
+                for _, include in ipairs(module.include) do
+                    if not contains(includeSet, include) then
+                        includeSet[#includeSet + 1] = include
+                        moduleCmd = moduleCmd .. " -I" .. include
+                    end
+                end
             end
+            buildObjectFiles(moduleCmd, module)
+            buildModule(moduleCmd, module)
         end
     end
     if project.generateCompileCommands then
@@ -474,21 +510,6 @@ local function genSh(project)
 
     build(project)
     shOutputFile:close()
-end
-local function mapModulesByType(modules)
-    local dynLibs = {}
-    local staticLibs = {}
-    local executables = {}
-    for _, mod in ipairs(modules) do
-        if mod.executable then
-            executables[#executables + 1] = mod
-        elseif mod.static then
-            staticLibs[#staticLibs + 1] = mod
-        else
-            dynLibs[#dynLibs + 1] = mod
-        end
-    end
-    return dynLibs, staticLibs, executables
 end
 
 local makefile = nil
