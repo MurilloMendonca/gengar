@@ -519,14 +519,11 @@ local function genMakefile(project)
         print("Failed to open Makefile file for writing")
         return
     end
-    makefile:write("CC = " .. project.compiler .. "\n")
-    makefile:write("CFLAGS = " .. project.flags .. "\n")
-    -- local baseCmd = project.compiler .. " " .. project.flags .. " "
 
-    makefile:write("\nall: buildDir dynamicLibs staticLibs executables")
+    makefile:write("all: buildDir dynamicLibs staticLibs executables")
     makefile:write("\nbuildDir:\n\tmkdir -p build")
 
-    local dynLibs, staticLibs, execs = mapModulesByType(project.modules)
+    local dynLibs, staticLibs, executables = mapModulesByType(project.modules)
     makefile:write("\ndynamicLibs: ")
     if dynLibs then
         for _, mod in ipairs(dynLibs) do
@@ -546,8 +543,8 @@ local function genMakefile(project)
     end
 
     makefile:write("\nexecutables: ")
-    if execs then
-        for _, mod in ipairs(execs) do
+    if executables then
+        for _, mod in ipairs(executables) do
             if mod.output then
                 makefile:write(mod.output .. " ")
             end
@@ -560,26 +557,104 @@ local function genMakefile(project)
             compile_commands[#compile_commands + 1] = {
                 command = cmd, file = obj.output, directory = os.getenv("PWD") }
         end
-        if stringContains(cmd, "-o ") then
-            local _, start = string.find(cmd, "-o ")
-            local out = getNextWord(cmd, start)
-            makefile:write("\n" .. out .. ":")
-            if obj and stringContains(out, obj.output) then
-                for _, src in ipairs(obj.sources) do
-                    local srcFiles = getSrcFilesFromPath(src)
-                    for _, srcFilePath in ipairs(srcFiles) do
-                        makefile:write(" " .. srcFilePath .. ".o")
+        makefile:write("\n\t" .. cmd)
+    end
+    local links, includes = getLinksAndIncludesFromHaunter()
+    if links and links ~= "" then
+        symlinkDepsLibsToBuild(links)
+    end
+
+    if project.modules == nil then
+        print("No modules found in project")
+        return
+    end
+
+    if dynLibs then
+        for _, module in ipairs(dynLibs) do
+            local moduleCmd = getBaseModuleCmd(module, project, includes)
+            local includeSet = {}
+            if module.include then
+                for _, include in ipairs(module.include) do
+                    if not contains(includeSet, include) then
+                        includeSet[#includeSet + 1] = include
+                        moduleCmd = moduleCmd .. " -I" .. include
                     end
                 end
             end
-            makefile:write("\n\t" .. cmd)
-        elseif stringContains(cmd, "ar rcs ") then
-            local _, start = string.find(cmd, "ar rcs ")
-            local out = getNextWord(cmd, start)
-            makefile:write("\n" .. out .. ":\n\t" .. cmd)
+            makefile:write("\n" .. module.output .. ".so :")
+            if module.sources then
+                for _, src in ipairs(module.sources) do
+                    local srcFiles = getSrcFilesFromPath(src)
+                    for _, srcFilePath in ipairs(srcFiles) do
+                        makefile:write(" " .. srcFilePath)
+                    end
+                end
+            end
+            buildObjectFiles(moduleCmd, module)
+            buildModule(moduleCmd, module)
         end
     end
-    build(project)
+    if staticLibs then
+        for _, module in ipairs(staticLibs) do
+            local moduleCmd = getBaseModuleCmd(module, project, includes)
+            local includeSet = {}
+            if module.include then
+                for _, include in ipairs(module.include) do
+                    if not contains(includeSet, include) then
+                        includeSet[#includeSet + 1] = include
+                        moduleCmd = moduleCmd .. " -I" .. include
+                    end
+                end
+            end
+            makefile:write("\n" .. module.output .. ".a :")
+            if module.sources then
+                for _, src in ipairs(module.sources) do
+                    local srcFiles = getSrcFilesFromPath(src)
+                    for _, srcFilePath in ipairs(srcFiles) do
+                        makefile:write(" " .. srcFilePath)
+                    end
+                end
+            end
+            buildObjectFiles(moduleCmd, module)
+            buildModule(moduleCmd, module)
+        end
+    end
+    if executables then
+        for _, module in ipairs(executables) do
+            local moduleCmd = getBaseModuleCmd(module, project, includes)
+            local includeSet = {}
+            if module.include then
+                for _, include in ipairs(module.include) do
+                    if not contains(includeSet, include) then
+                        includeSet[#includeSet + 1] = include
+                        moduleCmd = moduleCmd .. " -I" .. include
+                    end
+                end
+            end
+            makefile:write("\n" .. module.output .. ":")
+            if module.sources then
+                for _, src in ipairs(module.sources) do
+                    local srcFiles = getSrcFilesFromPath(src)
+                    for _, srcFilePath in ipairs(srcFiles) do
+                        makefile:write(" " .. srcFilePath)
+                    end
+                end
+            end
+            if module.static then
+                makefile:write(" staticLibs")
+            else
+                makefile:write(" dynamicLibs")
+            end
+            buildObjectFiles(moduleCmd, module)
+            buildModule(moduleCmd, module)
+        end
+    end
+    if project.generateCompileCommands then
+        generateCompileCommandsJson()
+    end
+
+    makefile:write("\nclean:")
+    clean(project)
     makefile:close()
 end
 
