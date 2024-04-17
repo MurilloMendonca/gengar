@@ -520,7 +520,7 @@ local function genMakefile(project)
         return
     end
 
-    makefile:write("all: buildDir dynamicLibs staticLibs executables")
+    makefile:write("all: buildDir handleDependencies dynamicLibs staticLibs executables")
     makefile:write("\nbuildDir:\n\tmkdir -p build")
 
     local dynLibs, staticLibs, executables = mapModulesByType(project.modules)
@@ -560,6 +560,7 @@ local function genMakefile(project)
         makefile:write("\n\t" .. cmd)
     end
     local links, includes = getLinksAndIncludesFromHaunter()
+    makefile:write("\nhandleDependencies: ")
     if links and links ~= "" then
         symlinkDepsLibsToBuild(links)
     end
